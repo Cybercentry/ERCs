@@ -127,7 +127,7 @@ contract IdentityRegistry is ERC721URIStorage, ERC721Enumerable, EIP712, IIdenti
         bytes calldata signature
     ) external {
         address agentOwner = ownerOf(agentId);
-        if (!_isAuthorized(agentOwner, msg.sender, agentId)) revert NotAuthorized();
+        if (msg.sender != agentOwner && !isApprovedForAll(agentOwner, msg.sender)) revert NotAuthorized();
         if (newWallet == address(0)) revert ZeroWallet();
         if (block.timestamp > deadline) revert SignatureExpired();
         if (nonce != _walletNonce[agentId]) revert InvalidNonce();
@@ -181,12 +181,20 @@ contract IdentityRegistry is ERC721URIStorage, ERC721Enumerable, EIP712, IIdenti
 
     // ----------------------------------------------------------- authorisation
 
-    function isAuthorizedOrOwner(address spender, uint256 agentId) external view returns (bool) {
-        return _isAuthorized(ownerOf(agentId), spender, agentId);
+    /// @notice Whether `spender` may act for `agentId`: the owner, or an operator approved for all the
+    ///         owner's tokens (`setApprovalForAll`). A single-token ERC-721 `approve` — the grant an owner
+    ///         makes to a marketplace or escrow to transfer the agent NFT — is intentionally NOT sufficient:
+    ///         "operator" throughout this spec means `setApprovalForAll`, so a party trusted only to move
+    ///         the token cannot administer the agent (repoint the URI, rotate the wallet, or irreversibly
+    ///         revoke it), request validation as the agent, and is likewise not treated as the agent for
+    ///         self-feedback. Used by the Reputation and Validation registries.
+    function isAuthorizedOrOwner(address spender, uint256 agentId) public view returns (bool) {
+        address owner = ownerOf(agentId);
+        return spender == owner || isApprovedForAll(owner, spender);
     }
 
     function _requireAuthorized(uint256 agentId) private view {
-        if (!_isAuthorized(ownerOf(agentId), msg.sender, agentId)) revert NotAuthorized();
+        if (!isAuthorizedOrOwner(msg.sender, agentId)) revert NotAuthorized();
     }
 
     // --------------------------------------------------------------- transfers
