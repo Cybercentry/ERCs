@@ -144,8 +144,11 @@ contract ReputationRegistry is ERC165, IReputationRegistry {
         for (uint64 i = start; i <= end && end != 0; ++i) {
             Feedback storage f = _feedback[agentId][clientAddress][i];
             if (!_matches(f, t1, t2, false)) continue;
+            // valueDecimals is 0..18 (enforced at write); compute the scale in checked arithmetic so the
+            // exponent's non-underflow does not rely on that invariant holding non-locally.
+            int256 scale = int256(10 ** uint256(18 - f.valueDecimals));
             unchecked {
-                sumWad += int256(f.value) * int256(10 ** uint256(18 - f.valueDecimals));
+                sumWad += int256(f.value) * scale;
                 ++count;
             }
         }
@@ -259,18 +262,42 @@ contract ReputationRegistry is ERC165, IReputationRegistry {
         uint256 agentId,
         address clientAddress,
         uint64 feedbackIndex,
-        address[] calldata responders
-    ) external view returns (uint64 count) {
-        if (responders.length == 0) {
-            address[] storage all = _responders[agentId][clientAddress][feedbackIndex];
-            for (uint256 i; i < all.length; ++i) {
-                count += _responseCount[agentId][clientAddress][feedbackIndex][all[i]];
-            }
-        } else {
+        address[] calldata responders,
+        uint64 fromIndex,
+        uint64 maxEntries
+    ) external view returns (uint64 count, uint64 nextIndex) {
+        if (responders.length != 0) {
+            // Exact lookup, already bounded by the caller-supplied responders array.
             for (uint256 i; i < responders.length; ++i) {
                 count += _responseCount[agentId][clientAddress][feedbackIndex][responders[i]];
             }
+            return (count, 0);
         }
+        // Aggregate over every responder. appendResponse is permissionless, so this list is
+        // attacker-growable; bound the work by maxEntries exactly as the other reads do, rather than
+        // scanning the whole list and risking an out-of-gas on a view that has no paginated alternative.
+        address[] storage all = _responders[agentId][clientAddress][feedbackIndex];
+        (uint64 start, uint64 end, uint64 next) = _windowOver(uint64(all.length), fromIndex, maxEntries);
+        for (uint64 i = start; i <= end && end != 0; ++i) {
+            count += _responseCount[agentId][clientAddress][feedbackIndex][all[i - 1]];
+        }
+        nextIndex = next;
+    }
+
+    /// @dev The inclusive 1-based window [start, end] over a list of `length` entries, and the 1-based
+    ///      index to resume from (0 == fully traversed). Same convention as the feedback reads; a window
+    ///      that inspects nothing resumes at start rather than reporting completion.
+    function _windowOver(uint64 length, uint64 fromIndex, uint64 maxEntries)
+        private
+        pure
+        returns (uint64 start, uint64 end, uint64 next)
+    {
+        start = fromIndex == 0 ? 1 : fromIndex;
+        if (start > length) return (start, 0, 0);
+        if (maxEntries == 0) return (start, 0, start);
+        uint256 limitEnd = uint256(start) + uint256(maxEntries) - 1;
+        end = limitEnd < length ? uint64(limitEnd) : length;
+        next = end < length ? end + 1 : 0;
     }
 
     // ------------------------------------------------------------------ ERC-165

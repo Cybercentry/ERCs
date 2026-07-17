@@ -17,7 +17,7 @@ interface IReputationRegistry {
 
     function getLastIndex(uint256 agentId, address clientAddress) external view returns (uint64);
     function readFeedback(uint256 agentId, address clientAddress, uint64 feedbackIndex) external view returns (int128 value, uint8 valueDecimals, string memory tag1, string memory tag2, bool isRevoked);
-    function getResponseCount(uint256 agentId, address clientAddress, uint64 feedbackIndex, address[] calldata responders) external view returns (uint64 count);
+    function getResponseCount(uint256 agentId, address clientAddress, uint64 feedbackIndex, address[] calldata responders, uint64 fromIndex, uint64 maxEntries) external view returns (uint64 count, uint64 nextIndex);
 
     function getSummary(uint256 agentId, address clientAddress, string calldata tag1, string calldata tag2, uint64 fromIndex, uint64 maxEntries) external view returns (uint64 count, int256 sumWad, uint64 nextIndex);
     function readFeedbackRange(uint256 agentId, address clientAddress, string calldata tag1, string calldata tag2, bool includeRevoked, uint64 fromIndex, uint64 maxEntries) external view returns (uint64[] memory feedbackIndexes, int128[] memory values, uint8[] memory valueDecimals, string[] memory tag1s, string[] memory tag2s, bool[] memory revokedStatuses, uint64 nextIndex);
