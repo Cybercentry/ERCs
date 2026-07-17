@@ -28,6 +28,9 @@ contract IdentityRegistry is ERC721URIStorage, ERC721Enumerable, EIP712, IIdenti
     /// @dev agentId => the next valid nonce for setAgentWallet.
     mapping(uint256 => uint256) private _walletNonce;
 
+    /// @dev agentId => whether the agent has been revoked. Set-once, and preserved across transfer.
+    mapping(uint256 => bool) private _revoked;
+
     string private constant AGENT_WALLET_KEY = "agentWallet";
     bytes32 private constant AGENT_WALLET_KEY_HASH = keccak256(bytes("agentWallet"));
 
@@ -38,6 +41,7 @@ contract IdentityRegistry is ERC721URIStorage, ERC721Enumerable, EIP712, IIdenti
 
     error NotAuthorized();
     error ReservedKey();
+    error AlreadyRevoked();
     error SignatureExpired();
     error InvalidNonce();
     error InvalidWalletSignature();
@@ -155,6 +159,24 @@ contract IdentityRegistry is ERC721URIStorage, ERC721Enumerable, EIP712, IIdenti
         _requireAuthorized(agentId);
         _metadata[agentId][AGENT_WALLET_KEY] = "";
         emit MetadataSet(agentId, AGENT_WALLET_KEY, AGENT_WALLET_KEY, "");
+    }
+
+    // --------------------------------------------------------------- revocation
+
+    /// @notice Irreversibly mark an agent revoked. A trustless registry has no authority that can revoke
+    ///         on a user's behalf, so this is the owner's own declaration that the agent is retired or
+    ///         compromised; being set-once and preserved across transfer, it cannot be undone by rotating
+    ///         the wallet or transferring the token. It is a signal, not an enforcement: the registry does
+    ///         not block a revoked agent's operations, and consumers decide what a revoked status means.
+    function revokeAgent(uint256 agentId) external {
+        _requireAuthorized(agentId);
+        if (_revoked[agentId]) revert AlreadyRevoked();
+        _revoked[agentId] = true;
+        emit AgentRevoked(agentId, msg.sender);
+    }
+
+    function isRevoked(uint256 agentId) external view returns (bool) {
+        return _revoked[agentId];
     }
 
     // ----------------------------------------------------------- authorisation

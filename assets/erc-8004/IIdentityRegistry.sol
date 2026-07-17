@@ -16,6 +16,7 @@ interface IIdentityRegistry is IERC721, IERC721Metadata {
     event Registered(uint256 indexed agentId, string agentURI, address indexed owner);
     event MetadataSet(uint256 indexed agentId, string indexed indexedMetadataKey, string metadataKey, bytes metadataValue);
     event URIUpdated(uint256 indexed agentId, string newURI, address indexed updatedBy);
+    event AgentRevoked(uint256 indexed agentId, address indexed revokedBy);
 
     function register() external returns (uint256 agentId);
     function register(string calldata agentURI) external returns (uint256 agentId);
@@ -30,6 +31,9 @@ interface IIdentityRegistry is IERC721, IERC721Metadata {
     function getAgentWallet(uint256 agentId) external view returns (address);
     function getAgentWalletNonce(uint256 agentId) external view returns (uint256);
     function unsetAgentWallet(uint256 agentId) external;
+
+    function revokeAgent(uint256 agentId) external;
+    function isRevoked(uint256 agentId) external view returns (bool);
 
     /// @dev Used by the Reputation Registry to enforce that a feedback submitter is neither the
     ///      owner of agentId nor an approved operator for it.
